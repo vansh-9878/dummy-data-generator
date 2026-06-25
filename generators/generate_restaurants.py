@@ -48,4 +48,5 @@ df = pd.DataFrame(restaurants)
 df.to_csv("restaurants.csv", index=False)
 
 print(f"Generated {len(df)} restaurants")
+
 # print(df.head())
