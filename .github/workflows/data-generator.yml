@@ -1,0 +1,59 @@
+name: Food Delivery Data Generator
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+
+  workflow_dispatch:
+
+jobs:
+  generate-data:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Packages
+        run: |
+          pip install -r requirements.txt
+
+      - name: Generate Customers
+        run: |
+          python customer_incremental.py
+
+      - name: Generate Orders
+        run: |
+          python generate_orders.py
+
+      - name: Update Orders
+        run: |
+          python update_orders.py
+
+      - name: Upload To Supabase
+        env:
+          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+          SUPABASE_PORT: ${{ secrets.SUPABASE_PORT }}
+          SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
+          SUPABASE_USER: ${{ secrets.SUPABASE_USER }}
+          SUPABASE_PASSWORD: ${{ secrets.SUPABASE_PASSWORD }}
+        run: |
+          python upload_to_supabase.py
+
+      - name: Commit Updated CSV Files
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+
+          git add *.csv
+
+          git commit -m "generated new data" || echo "nothing to commit"
+
+          git push
