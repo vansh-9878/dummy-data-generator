@@ -27,15 +27,15 @@ jobs:
 
       - name: Generate Customers
         run: |
-          python customer_incremental.py
+          python generators/customer_incremental.py
 
       - name: Generate Orders
         run: |
-          python generate_orders.py
+          python generators/generate_orders.py
 
       - name: Update Orders
         run: |
-          python update_orders.py
+          python generators/update_orders.py
 
       - name: Upload To Supabase
         env:
