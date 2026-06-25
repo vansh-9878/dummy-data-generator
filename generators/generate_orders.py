@@ -1,60 +1,102 @@
-import pandas as pd
+import os
 import random
-from datetime import datetime
-from pathlib import Path
+import pandas as pd
+import psycopg2
+from datetime import datetime, UTC
+from psycopg2.extras import execute_values
 
-customers = pd.read_csv("customers.csv")
-restaurants = pd.read_csv("restaurants.csv")
+conn = psycopg2.connect(
+    host=os.environ["SUPABASE_HOST"],
+    port=os.environ["SUPABASE_PORT"],
+    dbname=os.environ["SUPABASE_DB"],
+    user=os.environ["SUPABASE_USER"],
+    password=os.environ["SUPABASE_PASSWORD"],
+    sslmode="require"
+)
 
-FILE = "orders.csv"
+# Fetch customers
+customers = pd.read_sql(
+    """
+    SELECT customer_id
+    FROM customers
+    """,
+    conn
+)
+
+# Fetch restaurants
+restaurants = pd.read_sql(
+    """
+    SELECT restaurant_id
+    FROM restaurants
+    """,
+    conn
+)
+
+# Get next order id
+cur = conn.cursor()
+
+cur.execute(
+    """
+    SELECT COALESCE(MAX(order_id), 0)
+    FROM orders
+    """
+)
+
+next_id = cur.fetchone()[0] + 1
 
 statuses = [
     "PLACED",
     "PREPARING"
 ]
 
-if Path(FILE).exists():
-
-    orders = pd.read_csv(FILE)
-    next_id = orders["order_id"].max() + 1
-
-else:
-
-    orders = pd.DataFrame()
-    next_id = 1
+new_orders = random.randint(50, 150)
 
 rows = []
 
-new_orders = random.randint(50, 150)
-
 for i in range(new_orders):
 
-    now = datetime.utcnow()
+    current_ts = datetime.now(UTC)
 
-    rows.append({
-        "order_id": next_id + i,
-        "customer_id": random.choice(
-            customers["customer_id"].tolist()
-        ),
-        "restaurant_id": random.choice(
-            restaurants["restaurant_id"].tolist()
-        ),
-        "order_amount": round(
-            random.uniform(100, 2000),
-            2
-        ),
-        "status": random.choice(statuses),
-        "created_at": now,
-        "updated_at": now
-    })
+    rows.append(
+        (
+            next_id + i,
+            random.choice(
+                customers["customer_id"].tolist()
+            ),
+            random.choice(
+                restaurants["restaurant_id"].tolist()
+            ),
+            round(
+                random.uniform(100, 2000),
+                2
+            ),
+            random.choice(statuses),
+            current_ts,
+            current_ts
+        )
+    )
 
-new_df = pd.DataFrame(rows)
-
-orders = pd.concat(
-    [orders, new_df],
-    ignore_index=True
+execute_values(
+    cur,
+    """
+    INSERT INTO orders
+    (
+        order_id,
+        customer_id,
+        restaurant_id,
+        order_amount,
+        status,
+        created_at,
+        updated_at
+    )
+    VALUES %s
+    """,
+    rows
 )
 
-orders.to_csv(FILE, index=False)
+conn.commit()
+
+cur.close()
+conn.close()
 
 print(f"Created {new_orders} orders")

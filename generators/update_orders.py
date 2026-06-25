@@ -1,44 +1,85 @@
-import pandas as pd
+import os
 import random
+import pandas as pd
+import psycopg2
 from datetime import datetime, UTC
+from psycopg2.extras import execute_values
 
-orders = pd.read_csv("orders.csv")
+conn = psycopg2.connect(
+    host=os.environ["SUPABASE_HOST"],
+    port=os.environ["SUPABASE_PORT"],
+    dbname=os.environ["SUPABASE_DB"],
+    user=os.environ["SUPABASE_USER"],
+    password=os.environ["SUPABASE_PASSWORD"],
+    sslmode="require"
+)
 
 transitions = {
     "PLACED": ["PREPARING", "CANCELLED"],
     "PREPARING": ["DELIVERED"]
 }
 
-eligible = orders[
-    orders["status"].isin(transitions.keys())
-]
+# Fetch eligible orders
+query = """
+SELECT
+    order_id,
+    status
+FROM orders
+WHERE status IN ('PLACED', 'PREPARING')
+"""
 
-sample_size = 0
+orders = pd.read_sql(query, conn)
 
-if len(eligible) > 0:
+if len(orders) == 0:
+    print("No eligible orders found")
+    conn.close()
+    exit()
 
-    sample_size = min(
-        len(eligible),
-        random.randint(20, 100)
+sample_size = min(
+    len(orders),
+    random.randint(20, 100)
+)
+
+selected = orders.sample(sample_size)
+
+current_ts = datetime.now(UTC)
+
+updates = []
+
+for _, row in selected.iterrows():
+
+    new_status = random.choice(
+        transitions[row["status"]]
     )
 
-    selected = eligible.sample(sample_size)
-
-    current_ts = datetime.now(UTC).isoformat()
-
-    for idx in selected.index:
-
-        current_status = orders.loc[idx, "status"]
-
-        orders.loc[idx, "status"] = random.choice(
-            transitions[current_status]
+    updates.append(
+        (
+            row["order_id"],
+            new_status,
+            current_ts
         )
+    )
 
-        orders.loc[idx, "updated_at"] = current_ts
+cur = conn.cursor()
 
-orders.to_csv(
-    "orders.csv",
-    index=False
+execute_values(
+    cur,
+    """
+    UPDATE orders AS o
+    SET
+        status = v.status,
+        updated_at = v.updated_at
+    FROM (
+        VALUES %s
+    ) AS v(order_id, status, updated_at)
+    WHERE o.order_id = v.order_id
+    """,
+    updates
 )
+
+conn.commit()
+
+cur.close()
+conn.close()
 
 print(f"Updated {sample_size} orders")
