@@ -1,21 +1,16 @@
-name: Food Delivery Data Generator
-
-on:
-  schedule:
-    - cron: "*/30 * * * *"
-
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
 jobs:
   generate-data:
 
     runs-on: ubuntu-latest
 
-    steps:
+    env:
+      SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+      SUPABASE_PORT: ${{ secrets.SUPABASE_PORT }}
+      SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
+      SUPABASE_USER: ${{ secrets.SUPABASE_USER }}
+      SUPABASE_PASSWORD: ${{ secrets.SUPABASE_PASSWORD }}
 
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -39,13 +34,3 @@ jobs:
       - name: Update Orders
         run: |
           python generators/update_orders.py
-
-      - name: Upload To Supabase
-        env:
-          SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
-          SUPABASE_PORT: ${{ secrets.SUPABASE_PORT }}
-          SUPABASE_DB: ${{ secrets.SUPABASE_DB }}
-          SUPABASE_USER: ${{ secrets.SUPABASE_USER }}
-          SUPABASE_PASSWORD: ${{ secrets.SUPABASE_PASSWORD }}
-        run: |
-          python upload_to_supabase.py
